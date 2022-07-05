@@ -1,0 +1,485 @@
+﻿<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>demo</title>
+    <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+    <script src="https://cache.amap.com/lbs/static/es5.min.js"></script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=29fdbb786a542e844663e339a8d67ea2"></script>
+    <script type="text/javascript" src="https://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script>
+        function run() {
+            alert("Hello World!");
+        }
+        //执行本地exe（仅IE浏览器）
+        function exec(command) {
+            window.oldOnError = window.onerror;
+            window._command = command;
+            window.onerror = function (err) {
+                if (err.indexOf('utomation') != -1) {
+                    alert('命令' + window._command + ' 已经被用户禁止！');
+                    return true;
+                }
+                else
+                return false;
+            };
+            var wsh = new ActiveXObject('WScript.Shell');
+            if (wsh) wsh.Run(command);
+            wsh = null;
+            window.onerror = window.oldOnError;
+        }
+    </script>
+    <style>
+        html,
+        body,
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        label {
+            width: 120px;
+            height: 26px;
+            line-height: 26px;
+            margin-bottom: 0;
+        }
+
+        button.btn {
+            width: 80px;
+        }
+        .amap-icon img,
+        .amap-marker-content img {
+            width: 25px;
+            height: 34px;
+        }
+        .marker {
+            position: absolute;
+            top: -20px;
+            right: -118px;
+            color: #fff;
+            padding: 4px 10px;
+            box-shadow: 1px 1px 1px rgba(10, 10, 10, .2);
+            white-space: nowrap;
+            font-size: 12px;
+            font-family: "";
+            background-color: #25A5F7;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="input-card" style="width:25rem;">       
+        <div class="input-item" style="width:15rem;">
+            <p>实例&nbsp;&nbsp;<input type="text" id="input_inst_id" style="width:7rem;"></p>
+        </div>       
+        <div class="input-item" style="width:15rem;">
+            <p>时间限制&nbsp;&nbsp;<input type="text" id="input_time_limit" style="width:5rem;"></p>
+        </div>       
+        <label><b>自定义蚁群优化参数：</b></label>
+        <div class="input-item" style="width:15rem;">
+            <p>蚁群规模&nbsp;&nbsp;<input type="text" id="input_ant_num" style="width:5rem;"></p>
+        </div>
+        <div class="input-item" style="width:15rem;">
+            <p>蒸发速率&nbsp;&nbsp;<input type="text" id="input_ro" style="width:5rem;"></p>
+        </div>
+        <div class="input-item" style="width:15rem;">
+            <p>精英蚂蚁数目&nbsp;&nbsp;<input type="text" id="input_sigma" style="width:5rem;"></p>
+        </div>
+        <label><b>自定义模拟退火参数：</b></label>
+        <div class="input-item" style="width:15rem;" >
+            <p>初始温度&nbsp;&nbsp;<input type="text" id="input_T0" style="width:5rem;"></p>
+        </div>
+        <div class="input-item" style="width:15rem;">
+            <p>冷却速率&nbsp;&nbsp;<input type="text" id="input_cooling_rate" style="width:5rem;"></p>
+        </div>
+        <label><b>是否显示网格：</b></label>
+        <div class="input-item">
+            <button class="btn" id="showNet" style="margin-right:1rem;">是</button>
+            <button class="btn" id="removeNet">否</button>
+        </div>
+        <label><b>是否设置禁行区：</b></label>
+        <div class="input-item">
+            <button class="btn" id="setRes" style="margin-right:1rem;">是</button>
+            <button class="btn" id="noRes">否</button>
+        </div>
+
+        <label><b>请选择算法：</b></label>
+        <div class="input-item">
+            <button class="btn" id="SA" style="margin-right:1rem;">模拟退火</button>
+            <button class="btn" id="ACO">蚁群优化</button>
+        </div>
+        <label><b>操作：</b></label>
+        <div class="input-item">
+            <button class="btn" id="run" style="margin-right:1rem;">运行</button>
+            <button class="btn" id="reset" style="margin-right:1rem;">重置地图</button>
+            <button class="btn" id="show" onclick="show()">展示</button>
+        </div>
+        <br>
+        <input type="file" name="file" value="上传文件" onchange="showPreview(this)" />
+    </div>
+
+    <script>
+        var marker, map = new AMap.Map('container', {
+            resizeEnable: true,
+            zoom: 11,
+            center: [116.397428, 39.90923],
+            mapStyle: 'amap://styles/whitesmoke',
+            //mapStyle: 'amap://styles/grey',
+        });
+
+
+        function getData(callback){
+	    AMap.plugin('AMap.DistrictSearch', function() {
+    		var search = new AMap.DistrictSearch();
+    		search.search('中国', function(status, data) {
+    			if (status === 'complete') {
+    			    var positions = []
+    				var provinces = data['districtList'][0]['districtList']
+    				for (var i = 0; i < provinces.length; i += 1) {
+    				    positions.push({
+    				        center: provinces[i].center,
+    				        radius:Math.max(2, Math.floor(Math.random() * 10))
+    				    })
+    				}
+    				callback(positions)
+    			}
+    		});
+	    });
+	}
+	function addLayer(positions){
+	    AMap.plugin('AMap.CustomLayer', function() {
+	        var canvas = document.createElement('canvas');
+	        var customLayer = new AMap.CustomLayer(canvas, {
+                zooms: [3, 10],
+                alwaysRender:true,//缩放过程中是否重绘，复杂绘制建议设为false
+				zIndex: 120
+			});
+			var onRender = function(){
+			    var retina = AMap.Browser.retina;
+                var size = map.getSize();//resize
+                var width = size.width;
+                var height = size.height;
+                canvas.style.width = width+'px'
+                canvas.style.height = height+'px'
+                if(retina){//高清适配
+                    width*=2;
+                    height*=2;
+                }
+                canvas.width = width;
+                canvas.height = height;//清除画布
+			    var ctx = canvas.getContext("2d");
+        		ctx.fillStyle = '#08f';
+        		ctx.strokeStyle = '#fff';
+        		ctx.beginPath();
+			    for (var i = 0; i < positions.length; i += 1) {
+			        var center = positions[i].center;
+        			var pos = map.lngLatToContainer(center);
+        			var r = positions[i].radius;
+        			if(retina){
+        			    pos = pos.multiplyBy(2);
+        			    r*=2
+        			}
+        			ctx.moveTo(pos.x+r, pos.y)
+        		    ctx.arc(pos.x, pos.y, r, 0, 2*Math.PI);
+        		}
+        		ctx.lineWidth = retina?6:3
+        		ctx.closePath();
+        		ctx.stroke();
+        		ctx.fill();
+			}
+			customLayer.render = onRender;
+			customLayer.setMap(map);
+	    });
+	}
+	getData(addLayer);
+
+
+
+        //添加控件
+        // 同时引入工具条插件，比例尺插件和鹰眼插件
+        AMap.plugin([
+            'AMap.ToolBar',
+            'AMap.Scale',
+            'AMap.HawkEye',
+            'AMap.MapType',
+            'AMap.Geolocation',
+        ], function () {
+            // 在图面添加工具条控件，工具条控件集成了缩放、平移、定位等功能按钮在内的组合控件
+            map.addControl(new AMap.ToolBar());
+
+            // 在图面添加比例尺控件，展示地图在当前层级和纬度下的比例尺
+            map.addControl(new AMap.Scale());
+
+            // 在图面添加鹰眼控件，在地图右下角显示地图的缩略图
+            map.addControl(new AMap.HawkEye({ isOpen: true }));
+
+            // 在图面添加类别切换控件，实现默认图层与卫星图、实施交通图层之间切换的控制
+            map.addControl(new AMap.MapType());
+
+            // 在图面添加定位控件，用来获取和展示用户主机所在的经纬度位置
+            map.addControl(new AMap.Geolocation());
+        });
+
+        var arr = new Array();
+        var temp_str = "0";
+
+        function showPreview(source) {
+            var input = source;
+            var reader = new FileReader();
+            reader.readAsText(input.files[0]);
+            reader.onload = function () {
+                if (reader.result) {
+                    //显示文件内容
+                    temp_str = reader.result;
+                }
+            };
+        }
+        // 实例化点标记函数
+        
+        function addMarker(pos, info, fig) {
+            // 创建 AMap.Icon 实例：
+            var icon = new AMap.Icon({
+                size: new AMap.Size(16, 20),    // 图标尺寸
+                image: fig,  // Icon的图像
+                //imageOffset: new AMap.Pixel(0, -10),  // 图像相对展示区域的偏移量，适于雪碧图等
+                imageSize: new AMap.Size(16, 20)   // 根据所设置的大小拉伸或压缩图片
+            });
+            var marker = new AMap.Marker({
+                position: pos,  // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
+                icon: icon,
+                offset: new AMap.Pixel(-8, -17),
+                title: info
+            });
+            map.add(marker);
+        }
+        /*
+        var markerTest = new AMap.Marker({
+            position: new AMap.LngLat(116.39, 39.9),   // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
+            icon: "http://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png",
+            offset: new AMap.Pixel(-20, 30),
+            title: '北京'
+        });
+        */
+        var color = ["#FF0000", "#0000FF", "#008080", "#00FF7F", "#00008B", "#000000", "#FF00FF", "#FFFF00", "#FFA500", "#696969"];
+
+        function show() {
+            var solution = [];
+            var otherInfo = [];
+            if (temp_str == "0") {
+                alert("请先上传文件");
+            }
+            else {
+                //map.clearMap();
+                var obj = JSON.parse(temp_str);
+                var str = JSON.stringify(obj.cost);
+                for (var r in obj.routes) {
+                    var route = [];
+                    var routeInfo = [];
+                    for (var p in obj.routes[r]) {
+                        var point = [];
+                        point.push(obj.routes[r][p].ing);
+                        point.push(obj.routes[r][p].lat);
+                        route.push(point);
+                        var pointInfo = [];
+                        pointInfo.push(obj.routes[r][p].type);
+                        pointInfo.push(obj.routes[r][p].index);
+                        pointInfo.push(obj.routes[r][p].demand);
+                        routeInfo.push(pointInfo);
+                    }
+                    solution.push(route);
+                    otherInfo.push(routeInfo);
+                }
+                //添加点标记
+                var figURL1 = "http://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png";
+                var figURL2 = "http://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-red.png";
+                //添加起点、终点
+                var info = "起点\n编号：" + otherInfo[0][0][0];
+                var posStart = solution[0][0];
+                var posEnd = solution[0][solution[0].length - 1];
+                addMarker(posStart, info, figURL2);
+                //若起点、终点不一致
+                if (posStart[0] != posEnd[0] || posStart[1] != posEnd[1]) {
+                    info = "终点\n编号：" + otherInfo[0][solution[0].length - 1][0];
+                    addMarker(posEnd, info, figURL2);
+                }
+                
+                for (var r in solution) {
+                    for (var p in solution[r]) {
+                        //跳过起点、终点、中间点
+                        if (otherInfo[r][p][0] != 1) continue;
+                        info = "仓库\n编号：" + otherInfo[r][p][1] + "\n货物量：" + otherInfo[r][p][2];
+                        var pos = solution[r][p];
+                        console.log("point:\n");
+                        console.log(pos);
+                        addMarker(pos, info, figURL1);
+                    }
+                }
+                //添加路径（折线）
+                
+                for (i = 0; i < solution.length; i++) {
+                    var polyline = new AMap.Polyline({
+                        path: solution[i],
+                        isOutline: true,
+                        outlineColor: '#ffeeff',
+                        //outlineColor: '#000000',
+                        borderWeight: 2,
+                        strokeColor: color[i],
+                        strokeOpacity: 0.7,
+                        strokeWeight: 6,
+                        // 折线样式还支持 'dashed'
+                        strokeStyle: "solid",
+                        // strokeStyle是dashed时有效
+                        strokeDasharray: [10, 5],
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                        zIndex: 50,
+                        showDir: true,
+                    })
+                    map.add(polyline);
+                }
+                
+                //添加禁行区（矩形）
+                for (var area in obj.resAreas) {
+                    var southWest = new AMap.LngLat(obj.resAreas[area][0].ing, obj.resAreas[area][0].lat)
+                    var northEast = new AMap.LngLat(obj.resAreas[area][1].ing, obj.resAreas[area][1].lat)
+                    var bounds = new AMap.Bounds(southWest, northEast)
+
+                    var rectangle = new AMap.Rectangle({
+                        bounds: bounds,
+                        strokeColor: 'red',
+                        strokeWeight: 1,
+                        strokeOpacity: 0.5,
+                        strokeDasharray: [0, 0, 0],
+                        // strokeStyle还支持 solid
+                        strokeStyle: 'dashed',
+                        fillColor: 'blue',
+                        fillOpacity: 0.5,
+                        cursor: 'pointer',
+                        zIndex: 50,
+                    })
+
+                    map.add(rectangle)
+                }
+
+                map.setFitView();
+            }
+        }
+        var resArea = "noRes", algorithm = "SA";
+        //事件绑定
+        document.querySelector("#run").onclick = function () {
+            var path = "C:\\Users\\12537\\Desktop\\vrp\\";
+            var command = path + "vrp_demo.exe";
+            //获取、添加参数
+            var instID = document.querySelector('#input_inst_id').value;
+            var timeLimit = document.querySelector('#input_time_limit').value;
+            command += " " + instID + " " + resArea + " " + timeLimit + " " + algorithm;
+            if (algorithm == "SA") {
+                var T0 = document.querySelector('#input_T0').value;
+                var coolingRate = document.querySelector('#input_cooling_rate').value;
+                console.log(T0);
+                console.log(coolingRate);
+                command += " " + T0 + " " + coolingRate;
+            }
+            if (algorithm == "ACO") {
+                var antNum = document.querySelector("#input_ant_num").value;
+                var ro = document.querySelector("#input_ro").value;
+                var sigma = document.querySelector("#input_sigma").value;
+                command += " " + antNum + " " + ro + " " + sigma;
+            }
+            //alert(command);
+            if (instID == "" || timeLimit == "") alert("有必填项为空，请检查！");
+            exec(command);
+            //exec("vrp_demo.exe A-n34-k5.vrp setRes 5 ACO 25 0.85 3");
+            
+            //读json文件获取solution信息
+            /*
+            var displayData = function (data) {
+                console.log(data);
+            }
+            $.ajax({
+                url: "solution.json",
+                type: "GET",
+                dataType: "json",
+                success:
+                    function (data) {
+                        alert("read json");
+                    }
+            });
+            */
+        }
+        var markerTest = new AMap.Marker({
+            position: new AMap.LngLat(116.39, 39.9),   // 经纬度对象，也可以是经纬度构成的一维数组[116.39, 39.9]
+            icon: "http://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png",
+            offset: new AMap.Pixel(-20, 30),
+            title: '北京'
+        });
+        document.querySelector("#SA").onclick = function () {
+            algorithm = "SA";
+        }
+        document.querySelector("#ACO").onclick = function () {
+            algorithm = "ACO";
+        }
+        document.querySelector("#setRes").onclick = function () {
+            resArea = "setRes";
+        }
+        document.querySelector("#noRes").onclick = function () {
+            resArea = "noRes";
+        }
+        document.querySelector("#reset").onclick = function () {
+            // 清除地图上所有添加的覆盖物
+            map.clearMap();
+            map.setFitView();
+        }
+        //显示二维网格
+        //覆盖物群组
+        var overlayGroup = new AMap.OverlayGroup();
+        document.querySelector("#showNet").onclick = function () {
+            var corner1 = [116.286364, 39.835336];
+            var corner2 = [116.486178, 39.986495];
+            var stepx = (corner2[0] - corner1[0]) / 20;
+            var stepy = (corner2[1] - corner1[1]) / 20;
+            var routes = [];
+            for (i = 0; i <= 20; i++) {
+                //竖向网格线
+                var p1 = [corner1[0] + stepx * i, corner1[1]];
+                var p2 = [corner1[0] + stepx * i, corner2[1]];
+                routes.push([p1, p2]);
+                //横向网格线
+                p1 = [corner1[0], corner1[1] + stepy * i];
+                p2 = [corner2[0], corner1[1] + stepy * i];
+                routes.push([p1, p2]);
+            }
+            for (i = 0; i < routes.length; i++) {
+                //添加折线
+                var polyline = new AMap.Polyline({
+                    path: routes[i],
+                    isOutline: false,
+                    outlineColor: '#ffeeff',
+                    borderWeight: 1,
+                    strokeColor: "#000000",
+                    strokeOpacity: 0.3,
+                    strokeWeight: 1,
+                    // 折线样式还支持 'dashed'
+                    strokeStyle: "solid",
+                    // strokeStyle是dashed时有效
+                    strokeDasharray: [3, 3],
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                    zIndex: 50,
+                    showDir: false,
+                })
+                overlayGroup.addOverlay(polyline);
+            }
+            map.add(overlayGroup);
+            overlayGroup.show();
+        }
+        document.querySelector("#removeNet").onclick = function () {
+            overlayGroup.hide();
+        }
+    </script>
+</body>
+</html>
